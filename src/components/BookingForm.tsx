@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import ServiceSelection from './ServiceSelection';
 import DateTimeSelection from './DateTimeSelection';
@@ -8,6 +8,7 @@ import OrderSummary from './OrderSummary';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CalendarDays, User, Flower, CheckCircle } from 'lucide-react';
+import { supabase } from "@/integrations/supabase/client";
 
 const BookingForm = () => {
   const { toast } = useToast();
@@ -22,6 +23,7 @@ const BookingForm = () => {
     phone: '',
     specialRequests: '',
   });
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleCustomerChange = (field: keyof typeof customer, value: string) => {
     setCustomer((prev) => ({ ...prev, [field]: value }));
@@ -53,7 +55,7 @@ const BookingForm = () => {
     customer.email !== '' &&
     customer.phone !== '';
   
-  const handleConfirmBooking = () => {
+  const handleConfirmBooking = async () => {
     if (!isFormComplete) {
       toast({
         title: "Please complete all required fields",
@@ -62,16 +64,64 @@ const BookingForm = () => {
       });
       return;
     }
+
+    setIsSubmitting(true);
     
-    // In a real app, this would call an API to save the booking
-    toast({
-      title: "Booking Confirmed!",
-      description: "Your floral appointment has been scheduled successfully.",
-      variant: "default"
-    });
-    
-    // For demo purposes, we'd typically reset the form here
-    // or redirect to a confirmation page
+    try {
+      // Format the date for database storage
+      const formattedDate = selectedDate?.toISOString().split('T')[0];
+      
+      // Save to Supabase
+      const { data, error } = await supabase
+        .from('bookings')
+        .insert({
+          service_id: selectedService,
+          booking_date: formattedDate,
+          booking_time: selectedTime,
+          first_name: customer.firstName,
+          last_name: customer.lastName,
+          email: customer.email,
+          phone: customer.phone,
+          special_requests: customer.specialRequests || null
+        });
+      
+      if (error) {
+        console.error('Error saving booking:', error);
+        toast({
+          title: "Booking Failed",
+          description: "We couldn't save your booking. Please try again.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Booking Confirmed!",
+          description: "Your floral appointment has been scheduled successfully.",
+          variant: "default"
+        });
+        
+        // Reset form
+        setSelectedService('');
+        setSelectedDate(undefined);
+        setSelectedTime(null);
+        setCustomer({
+          firstName: '',
+          lastName: '',
+          email: '',
+          phone: '',
+          specialRequests: '',
+        });
+        setActiveTab('service');
+      }
+    } catch (err) {
+      console.error('Exception saving booking:', err);
+      toast({
+        title: "Booking Failed",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -152,6 +202,7 @@ const BookingForm = () => {
               specialRequests={customer.specialRequests}
               onConfirmBooking={handleConfirmBooking}
               isFormComplete={isFormComplete}
+              isSubmitting={isSubmitting}
             />
           </TabsContent>
         </Tabs>

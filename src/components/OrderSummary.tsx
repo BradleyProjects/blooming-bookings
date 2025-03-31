@@ -1,8 +1,9 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { Check, Flower2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { supabase } from "@/integrations/supabase/client";
 
 interface OrderSummaryProps {
   serviceId: string;
@@ -13,6 +14,7 @@ interface OrderSummaryProps {
   specialRequests: string;
   onConfirmBooking: () => void;
   isFormComplete: boolean;
+  isSubmitting: boolean;
 }
 
 const OrderSummary: React.FC<OrderSummaryProps> = ({
@@ -23,17 +25,44 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
   customerEmail,
   specialRequests,
   onConfirmBooking,
-  isFormComplete
+  isFormComplete,
+  isSubmitting
 }) => {
-  // Map service IDs to their names and prices
-  const serviceMap: Record<string, {name: string, price: number}> = {
-    'consultation': {name: 'Floral Consultation', price: 50},
-    'custom-arrangement': {name: 'Custom Arrangement', price: 85},
-    'event-flowers': {name: 'Event Florals', price: 150},
-    'subscription': {name: 'Flower Subscription', price: 95}
-  };
-
-  const service = serviceMap[serviceId] || {name: 'Selected Service', price: 0};
+  const [service, setService] = useState<{ name: string, price: number }>({ name: 'Selected Service', price: 0 });
+  const [loading, setLoading] = useState<boolean>(false);
+  
+  useEffect(() => {
+    const fetchServiceDetails = async () => {
+      if (!serviceId) return;
+      
+      try {
+        setLoading(true);
+        const { data, error } = await supabase
+          .from('services')
+          .select('name, price')
+          .eq('id', serviceId)
+          .single();
+        
+        if (error) {
+          console.error('Error fetching service:', error);
+          return;
+        }
+        
+        if (data) {
+          setService({
+            name: data.name,
+            price: parseFloat(data.price)
+          });
+        }
+      } catch (err) {
+        console.error('Exception fetching service:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchServiceDetails();
+  }, [serviceId]);
   
   return (
     <div className="py-6">
@@ -55,7 +84,9 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
         <div className="p-6 space-y-4 divide-y divide-floral-pink/10">
           <div className="flex justify-between py-2">
             <span className="text-gray-600">Service:</span>
-            <span className="font-medium text-floral-plum">{service.name}</span>
+            <span className="font-medium text-floral-plum">
+              {loading ? 'Loading...' : service.name}
+            </span>
           </div>
           
           <div className="flex justify-between py-2">
@@ -86,17 +117,19 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
           
           <div className="flex justify-between pt-4 pb-2">
             <span className="text-gray-600 font-medium">Total:</span>
-            <span className="font-bold text-xl text-floral-plum">${service.price}</span>
+            <span className="font-bold text-xl text-floral-plum">
+              ${loading ? '...' : service.price.toFixed(2)}
+            </span>
           </div>
         </div>
         
         <div className="p-6 bg-floral-green/5 border-t border-floral-green/10">
           <Button 
             onClick={onConfirmBooking}
-            disabled={!isFormComplete}
+            disabled={!isFormComplete || isSubmitting}
             className="w-full bg-floral-pink hover:bg-floral-pink/90 text-floral-plum font-medium py-6"
           >
-            {isFormComplete ? 'Confirm Booking' : 'Please Complete All Fields'}
+            {isSubmitting ? 'Processing...' : (isFormComplete ? 'Confirm Booking' : 'Please Complete All Fields')}
           </Button>
           <p className="text-xs text-center mt-3 text-gray-500">
             By confirming, you agree to our booking terms and cancellation policy.
