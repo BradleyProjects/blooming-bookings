@@ -51,7 +51,7 @@ const OrderSummary: React.FC<OrderSummaryProps> = ({
         if (data) {
           setService({
             name: data.name,
-            price: parseFloat(data.price)
+            price: data.price ? parseFloat(data.price.toString()) : 0
           });
         }
       } catch (err) {
